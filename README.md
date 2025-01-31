@@ -81,8 +81,7 @@ src/
 │   │   │   └── page.tsx
 │   │   ├── orders/         # Pedidos do usuário
 │   │   │   └── page.tsx
-│   │   ├── favorites/      # Restaurantes favoritos
-│   │   │   └── page.tsx
+│   │
 │   │   └── settings/       # Configurações do usuário
 │   │       └── page.tsx
 │   ├── layout.tsx          # Layout principal
