@@ -1,8 +1,8 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useUsers } from "@/hooks/useUsers";
+import { useStock } from "@/hooks/useStock";
 
-export default function UsersPage() {
-  const { users, isLoading } = useUsers();
+export default function StockPage() {
+  const { stock, isLoading } = useStock();
 
   if (isLoading) {
     return <div>Carregando...</div>;
@@ -10,22 +10,20 @@ export default function UsersPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Gerenciamento de Usuários</h1>
+      <h1 className="text-2xl font-bold mb-6">Gerenciamento de Estoque</h1>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Nome</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Função</TableHead>
+            <TableHead>Produto</TableHead>
+            <TableHead>Quantidade</TableHead>
             <TableHead>Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.map((user: any) => (
-            <TableRow key={user.id}>
-              <TableCell>{user.name}</TableCell>
-              <TableCell>{user.email}</TableCell>
-              <TableCell>{user.role}</TableCell>
+          {stock.map((item: any) => (
+            <TableRow key={item.id}>
+              <TableCell>{item.name}</TableCell>
+              <TableCell>{item.quantity}</TableCell>
               <TableCell>
                 <Button variant="ghost">Editar</Button>
                 <Button variant="destructive">Excluir</Button>
