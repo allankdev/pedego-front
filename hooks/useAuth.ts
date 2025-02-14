@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { authStore } from "@/lib/store/authStore";
 import { useRouter } from "next/navigation";
+import Cookie from "js-cookie";  // Importando a biblioteca js-cookie
 import { jwtDecode } from "jwt-decode";
 
 export const useAuth = () => {
@@ -11,7 +12,7 @@ export const useAuth = () => {
   const publicPaths = ["/auth/login", "/auth/register", "/"];
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = Cookie.get("token");  // Usando Cookie.get para pegar o token
 
     if (!token || token.split(".").length !== 3) {
       console.warn("Token inválido ou ausente, redirecionando para login...");
@@ -86,7 +87,7 @@ export const useAuth = () => {
       // Corrigido: Pegando `access_token` corretamente
       const token = data.access_token;
       if (token) {
-        localStorage.setItem("token", token);
+        Cookie.set("token", token, { expires: 1 });  // Usando Cookie.set para salvar no cookie
       }
 
       setUser(data.user);
@@ -124,7 +125,7 @@ export const useAuth = () => {
 
       const token = data.access_token;
       if (token) {
-        localStorage.setItem("token", token);
+        Cookie.set("token", token, { expires: 1 });  // Usando Cookie.set para salvar no cookie
       }
 
       setUser(data.user);
@@ -140,7 +141,7 @@ export const useAuth = () => {
   };
 
   const clearSession = () => {
-    localStorage.removeItem("token");
+    Cookie.remove("token");  // Usando Cookie.remove para remover o token do cookie
     clearUser();
     if (!publicPaths.includes(window.location.pathname)) {
       router.push("/auth/login");
