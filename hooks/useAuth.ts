@@ -2,41 +2,38 @@
 import { useEffect, useState } from "react";
 import { authStore } from "@/lib/store/authStore";
 import { useRouter } from "next/navigation";
-import {jwtDecode } from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 
 export const useAuth = () => {
   const { user, setUser, clearUser } = authStore();
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const publicPaths = ["/auth/login", "/auth/register", "/"];
 
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    // Evita redirecionamento automático se estiver na tela de registro
-    if (!token && window.location.pathname !== "/auth/register") {
-      clearUser();
-      router.push("/auth/login");
-      setIsLoading(false);
+    if (!token || token.split(".").length !== 3) {
+      console.warn("Token inválido ou ausente, redirecionando para login...");
+      clearSession();
       return;
     }
 
-    if (token) {
-      try {
-        const decoded = jwtDecode<{ id: string }>(token);
-        fetchUser(decoded.id, token);
-      } catch (error) {
-        console.error("Erro ao decodificar o token:", error);
-        clearUser();
-        localStorage.removeItem("token");
-        if (window.location.pathname !== "/auth/register") {
-          router.push("/auth/login");
-        }
-        setIsLoading(false);
+    try {
+      // Corrigido: Pegar `sub` do token
+      const decoded = jwtDecode<{ sub: string }>(token);
+
+      if (!decoded.sub) {
+        throw new Error("Token sem userId válido");
       }
+
+      fetchUser(decoded.sub, token);
+    } catch (error) {
+      console.error("Erro ao decodificar o token:", error);
+      clearSession();
     }
   }, [setUser, clearUser, router]);
 
-  // Função para buscar os dados do usuário autenticado
   const fetchUser = async (userId: string, token: string) => {
     setIsLoading(true);
     try {
@@ -48,24 +45,31 @@ export const useAuth = () => {
         },
       });
 
-      if (!response.ok) throw new Error("Usuário não autenticado ou sessão expirada");
+      if (!response.ok) {
+        throw new Error("Usuário não autenticado ou sessão expirada");
+      }
 
       const data = await response.json();
       setUser(data);
     } catch (error) {
       console.error("Erro ao buscar usuário:", error);
-      clearUser();
-      localStorage.removeItem("token");
-      if (window.location.pathname !== "/auth/register") {
-        router.push("/auth/login");
-      }
+      clearSession();
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Função de login
   const login = async (email: string, password: string) => {
+    if (typeof email !== "string" || typeof password !== "string") {
+      console.error("Erro: Os campos devem ser strings!");
+      return;
+    }
+
+    if (password.length < 6) {
+      console.error("Erro: A senha deve ter pelo menos 6 caracteres!");
+      return;
+    }
+
     try {
       const response = await fetch("http://localhost:3000/api/auth/login", {
         method: "POST",
@@ -74,18 +78,36 @@ export const useAuth = () => {
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Erro ao fazer login");
 
-      localStorage.setItem("token", data.token);
+      if (!response.ok) {
+        throw new Error(data.message || "Erro ao fazer login");
+      }
+
+      // Corrigido: Pegando `access_token` corretamente
+      const token = data.access_token;
+      if (token) {
+        localStorage.setItem("token", token);
+      }
+
       setUser(data.user);
       router.push("/");
     } catch (error) {
       console.error("Erro ao fazer login:", error);
+      throw error;
     }
   };
 
-  // Função de registro
   const register = async (name: string, email: string, password: string) => {
+    if (typeof name !== "string" || typeof email !== "string" || typeof password !== "string") {
+      console.error("Erro: Os campos devem ser strings!");
+      return;
+    }
+
+    if (password.length < 6) {
+      console.error("Erro: A senha deve ter pelo menos 6 caracteres!");
+      return;
+    }
+
     try {
       const response = await fetch("http://localhost:3000/api/auth/register", {
         method: "POST",
@@ -94,21 +116,36 @@ export const useAuth = () => {
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Erro ao registrar");
+      console.log("Resposta da API (registro):", data);
 
-      localStorage.setItem("token", data.token);
+      if (!response.ok) {
+        throw new Error(data.message || "Erro ao registrar");
+      }
+
+      const token = data.access_token;
+      if (token) {
+        localStorage.setItem("token", token);
+      }
+
       setUser(data.user);
       router.push("/");
     } catch (error) {
       console.error("Erro ao registrar:", error);
+      throw error;
     }
   };
 
-  // Função de logout
   const logout = () => {
+    clearSession();
+  };
+
+  const clearSession = () => {
     localStorage.removeItem("token");
     clearUser();
-    router.push("/auth/login");
+    if (!publicPaths.includes(window.location.pathname)) {
+      router.push("/auth/login");
+    }
+    setIsLoading(false);
   };
 
   return { user, isLoading, login, register, logout };
