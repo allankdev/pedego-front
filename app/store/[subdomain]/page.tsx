@@ -1,49 +1,66 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { useOrders } from "@/hooks/useOrders";
-import { useProducts } from "@/hooks/useProducts";
+'use client';
 
-export default function StoreDashboardPage() {
-  const { orders, isLoading: isOrdersLoading } = useOrders();
-  const { products, isLoading: isProductsLoading } = useProducts();
+import { useParams } from 'next/navigation';
+import { useStoreData } from '@/hooks/useStores';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useCartStore } from '@/lib/store/cartStore';
+import FloatingCart from '@/components/cart/FloatingCart';
 
-  if (isOrdersLoading || isProductsLoading) {
-    return <div>Carregando...</div>;
+export default function StorePage() {
+  const { subdomain } = useParams() as { subdomain: string };
+  const { store, products, loading, error } = useStoreData(subdomain);
+  const { addItem } = useCartStore();
+
+  if (loading) {
+    return (
+      <div className="p-10 text-center">
+        <p>Carregando loja...</p>
+      </div>
+    );
+  }
+
+  if (error || !store) {
+    return (
+      <div className="p-10 text-center">
+        <h1 className="text-xl font-bold text-red-600">Loja não encontrada 🛑</h1>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Dashboard do Restaurante</h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pedidos Hoje</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{orders.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Produtos Cadastrados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{products.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Receita Total</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              R${" "}
-              {orders
-                .reduce((total, order) => total + order.total, 0)
-                .toFixed(2)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <header className="text-center space-y-2">
+        <h1 className="text-3xl font-bold">{store.name}</h1>
+        <p className="text-muted-foreground">{store.description}</p>
+      </header>
+
+      <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {products.map((product) => (
+          <Card key={product.id}>
+            <CardContent className="p-4 space-y-2">
+              <h3 className="font-bold">{product.name}</h3>
+              <p className="text-sm text-muted-foreground">{product.description}</p>
+              <p className="text-sm font-semibold">R$ {parseFloat(product.price).toFixed(2)}</p>
+              <Button
+                onClick={() =>
+                  addItem({
+                    id: product.id,
+                    name: product.name,
+                    price: parseFloat(product.price),
+                    quantity: 1,
+                  })
+                }
+              >
+                Adicionar ao carrinho
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
+      {/* Carrinho flutuante */}
+      <FloatingCart />
     </div>
   );
 }

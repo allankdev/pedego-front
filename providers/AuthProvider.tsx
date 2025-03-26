@@ -1,43 +1,73 @@
-"use client";
-import { ReactNode, useEffect } from "react";
-import { authStore } from "@/lib/store/authStore";
-import { useRouter } from "next/navigation";
+'use client';
+
+import { ReactNode, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import Cookie from 'js-cookie';
+import { jwtDecode } from 'jwt-decode';
+import { authStore } from '@/lib/store/authStore';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const { setUser, clearUser } = authStore();
   const router = useRouter();
+  const pathname = usePathname();
+  const { setUser, clearUser } = authStore();
+
+  // 🟢 Rotas que não exigem token
+  const publicPaths = [
+    '/',
+    '/auth/login',
+    '/auth/register',
+    '/auth/register-as-store',
+    '/store',
+    '/checkout',
+  ];
+
+  const isPublic = publicPaths.some((publicPath) =>
+    pathname === publicPath || pathname.startsWith(publicPath + '/')
+  );
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
+    const token = Cookie.get('token');
+    console.log('TOKEN:', token);
+    console.log('PATHNAME:', pathname);
+
+    // 🔒 Se não tiver token e estiver em rota protegida → redireciona
+    if ((!token || token.split('.').length !== 3) && !isPublic) {
+      console.warn('🔁 Redirecionando para login...');
       clearUser();
-      router.push("/auth/login");
+      router.push('/auth/login');
       return;
     }
 
-    const fetchUser = async () => {
-      try {
-        const response = await fetch("http://localhost:3000/api/users", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+    // 🟢 Se a rota for pública, não faz mais nada
+    if (!token || token.split('.').length !== 3) return;
+
+    try {
+      const decoded = jwtDecode<{ sub: string }>(token);
+      const userId = decoded.sub;
+
+      fetch(`http://localhost:3000/api/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error('Sessão inválida');
+          return res.json();
+        })
+        .then((data) => setUser(data))
+        .catch((err) => {
+          console.error('Erro ao buscar user:', err);
+          if (!isPublic) {
+            clearUser();
+            router.push('/auth/login');
+          }
         });
-
-        if (!response.ok) {
-          throw new Error("Usuário não autenticado ou sessão expirada");
-        }
-
-        const data = await response.json();
-        setUser(data);
-      } catch (error) {
-        console.error("Erro ao buscar usuário:", error);
+    } catch (err) {
+      console.error('Erro ao decodificar token:', err);
+      if (!isPublic) {
         clearUser();
-        router.push("/auth/login");
+        router.push('/auth/login');
       }
-    };
-
-    fetchUser();
-  }, [setUser, clearUser, router]);
+    }
+  }, [pathname, setUser, clearUser, router]);
 
   return <>{children}</>;
 };
