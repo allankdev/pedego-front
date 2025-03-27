@@ -25,7 +25,7 @@ export default function CartPage() {
   const handleValidateCoupon = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/coupons/validate?code=${couponCode}`);
+      const res = await fetch(`http://localhost:3000/api/coupons/validate?code=${couponCode}`);
       const data = await res.json();
       if (!res.ok || !data.valid) throw new Error('Cupom inválido ou expirado');
       applyCoupon(data);

@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
   const { setUser, clearUser } = authStore();
 
-  // 🟢 Rotas que não exigem token
+  // 🟢 Rotas públicas — sem autenticação obrigatória
   const publicPaths = [
     '/',
     '/auth/login',
@@ -19,28 +19,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     '/auth/register-as-store',
     '/store',
     '/checkout',
+    '/checkout/cart',
+    '/checkout/identify',
+    '/checkout/confirm',
+    '/checkout/success',
   ];
 
-  const isPublic = publicPaths.some((publicPath) =>
-    pathname === publicPath || pathname.startsWith(publicPath + '/')
-  );
+  // ✅ Garante que qualquer variação (com / ou query) seja permitida
+  const isPublic = publicPaths.some((path) => pathname.startsWith(path));
 
   useEffect(() => {
     const token = Cookie.get('token');
-    console.log('TOKEN:', token);
-    console.log('PATHNAME:', pathname);
+    console.log('📍 PATHNAME:', pathname);
+    console.log('🔐 TOKEN:', token);
 
-    // 🔒 Se não tiver token e estiver em rota protegida → redireciona
-    if ((!token || token.split('.').length !== 3) && !isPublic) {
-      console.warn('🔁 Redirecionando para login...');
-      clearUser();
-      router.push('/auth/login');
+    // 🛑 Sem token + rota protegida → redireciona
+    if (!token || token.split('.').length !== 3) {
+      if (!isPublic) {
+        clearUser();
+        router.push('/auth/login');
+      }
       return;
     }
 
-    // 🟢 Se a rota for pública, não faz mais nada
-    if (!token || token.split('.').length !== 3) return;
+    // ✅ Com token e rota pública → ignora
+    if (isPublic) return;
 
+    // 🔄 Busca usuário e valida sessão
     try {
       const decoded = jwtDecode<{ sub: string }>(token);
       const userId = decoded.sub;
@@ -52,22 +57,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (!res.ok) throw new Error('Sessão inválida');
           return res.json();
         })
-        .then((data) => setUser(data))
-        .catch((err) => {
-          console.error('Erro ao buscar user:', err);
-          if (!isPublic) {
-            clearUser();
-            router.push('/auth/login');
-          }
+        .then(setUser)
+        .catch(() => {
+          clearUser();
+          if (!isPublic) router.push('/auth/login');
         });
     } catch (err) {
-      console.error('Erro ao decodificar token:', err);
-      if (!isPublic) {
-        clearUser();
-        router.push('/auth/login');
-      }
+      clearUser();
+      if (!isPublic) router.push('/auth/login');
     }
-  }, [pathname, setUser, clearUser, router]);
+  }, [pathname]);
 
   return <>{children}</>;
 };

@@ -1,11 +1,11 @@
-'use client';
+'use client'
 
 import { useCartStore } from '@/lib/store/cartStore';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function ConfirmCheckoutPage() {
   const {
@@ -14,13 +14,16 @@ export default function ConfirmCheckoutPage() {
     coupon,
     updateCustomerInfo,
     clearCart,
-    total,
   } = useCartStore();
 
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [deliveryType, setDeliveryType] = useState<'entrega' | 'retirada' | ''>(customerInfo?.deliveryType || '');
-  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'dinheiro' | 'cartao' | ''>(customerInfo?.paymentMethod || '');
+  const [deliveryType, setDeliveryType] = useState<'entrega' | 'retirada' | ''>(
+    customerInfo?.deliveryType || ''
+  );
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'dinheiro' | 'cartao' | ''>(
+    customerInfo?.paymentMethod || ''
+  );
   const [address, setAddress] = useState(customerInfo?.address || '');
   const [observations, setObservations] = useState('');
 
@@ -29,39 +32,40 @@ export default function ConfirmCheckoutPage() {
   const finalTotal = subtotal - discount;
 
   const handleSubmit = async () => {
-    if (!customerInfo) return;
+    if (!customerInfo || !deliveryType || !paymentMethod) return;
 
-    updateCustomerInfo({
-      ...customerInfo,
+    const payload = {
+      customerName: customerInfo.name,
+      customerPhone: customerInfo.phone,
+      customerAddress: deliveryType === 'entrega' ? address : '',
       deliveryType,
       paymentMethod,
-      address,
-    });
+      observations,
+      items: items.map((item) => ({
+        productId: item.id,
+        quantity: item.quantity,
+      })),
+      status: 'pendente',
+    };
 
-    setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/orders`, {
+      setLoading(true);
+      const res = await fetch('http://localhost:3000/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerName: customerInfo.name,
-          customerEmail: customerInfo.email || '',
-          customerPhone: customerInfo.phone,
-          customerAddress: deliveryType === 'entrega' ? address : '',
-          deliveryType,
-          paymentMethod,
-          observations,
-          items: items.map((item) => ({
-            productId: item.id,
-            quantity: item.quantity,
-          })),
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error('Erro ao fazer pedido');
-      alert('✅ Pedido realizado com sucesso!');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Erro ao fazer pedido');
+      }
+
+      const createdOrder = await res.json();
       clearCart();
-      router.push('/');
+
+      // Redireciona para a tela de sucesso com o ID do pedido
+      router.push(`/checkout/success?orderId=${createdOrder.id}`);
     } catch (err) {
       console.error(err);
       alert('Erro ao finalizar pedido');
@@ -70,99 +74,101 @@ export default function ConfirmCheckoutPage() {
     }
   };
 
-  const selectableBox = (label: string, selected: boolean, onClick: () => void, description?: string) => (
+  const SelectBox = ({
+    label,
+    selected,
+    onClick,
+    description,
+  }: {
+    label: string;
+    selected: boolean;
+    onClick: () => void;
+    description?: string;
+  }) => (
     <div
       onClick={onClick}
-      className={`border rounded-xl p-4 cursor-pointer ${selected ? 'border-black bg-muted' : 'border-gray-300'}`}
+      className={`border rounded-xl p-4 cursor-pointer transition-all hover:shadow-sm ${
+        selected ? 'border-black bg-muted' : 'border-gray-300'
+      }`}
     >
-      <p className="font-semibold">{label}</p>
+      <p className="font-medium">{label}</p>
       {description && <p className="text-sm text-muted-foreground">{description}</p>}
     </div>
   );
 
   return (
     <div className="max-w-xl mx-auto p-6 space-y-6">
-      <h1 className="text-xl font-bold">Finalizar pedido</h1>
+      <h1 className="text-2xl font-bold text-center">🧾 Finalizar pedido</h1>
 
-      <div className="border rounded-lg p-4">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Este pedido será entregue a:</p>
-            <p className="font-semibold">{customerInfo?.name}</p>
-            <p className="text-sm">{customerInfo?.phone}</p>
+      <Card>
+        <CardContent className="p-4 space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-muted-foreground">Entregar para:</p>
+              <p className="font-semibold">{customerInfo?.name}</p>
+              <p className="text-sm">{customerInfo?.phone}</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => router.push('/checkout/identify')}>
+              Trocar
+            </Button>
           </div>
-          <Button size="sm" variant="outline" onClick={() => router.push('/checkout/identify')}>
-            Trocar
-          </Button>
-        </div>
 
-        <div className="space-y-2">
-          <h2 className="font-semibold">Escolha a forma de entrega</h2>
-          {selectableBox('Cadastrar endereço', deliveryType === 'entrega', () => setDeliveryType('entrega'))}
-          {deliveryType === 'entrega' && (
-            <Input
-              placeholder="Endereço para entrega"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="mt-2"
+          <div className="space-y-2">
+            <h2 className="font-semibold">📦 Forma de entrega</h2>
+            <SelectBox
+              label="Cadastrar endereço"
+              selected={deliveryType === 'entrega'}
+              onClick={() => setDeliveryType('entrega')}
             />
-          )}
-          {selectableBox(
-            'Retirar no estabelecimento',
-            deliveryType === 'retirada',
-            () => setDeliveryType('retirada'),
-            'Av. Manoel Morais, 175 - Manaíra, João Pessoa - PB'
-          )}
-        </div>
+            {deliveryType === 'entrega' && (
+              <Input
+                placeholder="Endereço completo"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="mt-2"
+              />
+            )}
+            <SelectBox
+              label="Retirar no estabelecimento"
+              selected={deliveryType === 'retirada'}
+              onClick={() => setDeliveryType('retirada')}
+              description="Av. Manoel Morais, 175 - Manaíra, João Pessoa - PB"
+            />
+          </div>
 
-        <div className="space-y-2 mt-4">
-          <h2 className="font-semibold">Escolha a forma de pagamento</h2>
-          {selectableBox('Dinheiro', paymentMethod === 'dinheiro', () => setPaymentMethod('dinheiro'))}
-          {selectableBox('Cartão (Crédito/Débito/PIX)', paymentMethod === 'cartao', () => setPaymentMethod('cartao'))}
-        </div>
+          <div className="space-y-2">
+            <h2 className="font-semibold">💳 Forma de pagamento</h2>
+            <SelectBox label="Dinheiro" selected={paymentMethod === 'dinheiro'} onClick={() => setPaymentMethod('dinheiro')} />
+            <SelectBox label="Cartão ou PIX" selected={paymentMethod === 'cartao'} onClick={() => setPaymentMethod('cartao')} />
+          </div>
 
-        <div className="space-y-1 mt-4">
-          <h2 className="font-semibold">Observações</h2>
-          <Input
-            placeholder="Ex: Apertar campainha, não buzinar, etc."
-            value={observations}
-            onChange={(e) => setObservations(e.target.value)}
-          />
-        </div>
+          <div className="space-y-1">
+            <h2 className="font-semibold">✍️ Observações</h2>
+            <Input
+              placeholder="Ex: Sem cebola, portão azul, etc."
+              value={observations}
+              onChange={(e) => setObservations(e.target.value)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-2 text-right">
+        <p>Subtotal: R$ {subtotal.toFixed(2)}</p>
+        {coupon && (
+          <p className="text-green-600 font-medium">Desconto: - R$ {discount.toFixed(2)}</p>
+        )}
+        <p className="text-lg font-bold">Total: R$ {finalTotal.toFixed(2)}</p>
       </div>
 
       <div className="space-y-2">
-        <div className="flex justify-between">
-          <span>Subtotal</span>
-          <span>R$ {subtotal.toFixed(2)}</span>
-        </div>
-        {coupon && (
-          <div className="flex justify-between text-green-600">
-            <span>Desconto ({coupon.code})</span>
-            <span>- R$ {discount.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="flex justify-between font-bold text-lg">
-          <span>Total</span>
-          <span>R$ {finalTotal.toFixed(2)}</span>
-        </div>
+        <Button className="w-full" onClick={handleSubmit} disabled={loading || !deliveryType || !paymentMethod}>
+          {loading ? 'Enviando...' : 'Fazer pedido'}
+        </Button>
+        <Button variant="ghost" className="w-full text-muted-foreground" onClick={() => router.back()}>
+          Voltar
+        </Button>
       </div>
-
-      <Button
-        className="w-full mt-2"
-        onClick={handleSubmit}
-        disabled={loading || !deliveryType || !paymentMethod}
-      >
-        {loading ? 'Enviando...' : 'Fazer pedido'}
-      </Button>
-
-      <Button
-        variant="ghost"
-        className="w-full text-muted-foreground"
-        onClick={() => router.back()}
-      >
-        Voltar
-      </Button>
     </div>
   );
 }
