@@ -20,22 +20,34 @@ export default function CartPage() {
   const [couponCode, setCouponCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [discount, setDiscount] = useState(0);  // Adicionando estado para desconto
   const router = useRouter();
 
+  // Valida o cupom
   const handleValidateCoupon = async () => {
     setLoading(true);
+    setError(''); // Limpa qualquer erro anterior
+
     try {
       const res = await fetch(`http://localhost:3000/api/coupons/validate?code=${couponCode}`);
       const data = await res.json();
-      if (!res.ok || !data.valid) throw new Error('Cupom inválido ou expirado');
+
+      // Verifica se o cupom foi validado corretamente
+      if (!res.ok || !data.discount) {
+        throw new Error('Cupom inválido ou expirado');
+      }
+
+      // Aplica o cupom ao carrinho e atualiza o desconto
       applyCoupon(data);
+      setDiscount(data.discount);  // Define o desconto no estado
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message); // Exibe mensagem de erro se cupom não for válido
     } finally {
       setLoading(false);
     }
   };
 
+  // Verifica se o carrinho está vazio
   if (items.length === 0) {
     return (
       <div className="p-10 text-center">
@@ -48,6 +60,8 @@ export default function CartPage() {
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold">🛒 Sacola</h1>
+
+      {error && <p className="text-red-500">{error}</p>} {/* Exibindo erro, se houver */}
 
       {items.map((item) => (
         <Card key={item.id}>
@@ -68,6 +82,7 @@ export default function CartPage() {
         </Card>
       ))}
 
+      {/* Seção de cupom */}
       <div className="flex items-center gap-2">
         <Input
           placeholder="Código do cupom"
@@ -78,10 +93,13 @@ export default function CartPage() {
           {loading ? 'Validando...' : 'Aplicar'}
         </Button>
       </div>
-      {error && <p className="text-red-500 text-sm">{error}</p>}
+      {error && <p className="text-red-500 text-sm">{error}</p>}  {/* Exibe erro se houver */}
 
+      {/* Exibe o valor total com desconto aplicado */}
       <div className="flex justify-between items-center mt-6">
-        <p className="text-xl font-bold">Total: R$ {(total || 0).toFixed(2)}</p>
+        <p className="text-xl font-bold">
+          Total: R$ {(total - discount).toFixed(2)} {/* Total com desconto aplicado */}
+        </p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.back()}>
             Voltar
