@@ -18,21 +18,39 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (!isLoading && user?.role !== 'ADMIN') {
-      router.push('/auth/login'); // ou /unauthorized se quiser
+      router.push('/auth/login');
     }
   }, [isLoading, user, router]);
 
-  // Simulando chamadas de stats da API
   useEffect(() => {
-    if (user?.id) {
-      // Aqui você chamaria os endpoints reais:
-      setStats({
-        totalOrders: 12,
-        totalProducts: 8,
-        subscription: 'trial', // ou 'monthly' | 'annual'
-      });
-    }
+    if (user) fetchStats();
   }, [user]);
+
+  const fetchStats = async () => {
+    const token = document.cookie.split('token=')[1];
+
+    const [ordersRes, productsRes, subscriptionRes] = await Promise.all([
+      fetch('http://localhost:3000/api/orders/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      fetch('http://localhost:3000/api/products', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      fetch(`http://localhost:3000/api/subscriptions/${user.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ]);
+
+    const orders = await ordersRes.json();
+    const products = await productsRes.json();
+    const subscription = await subscriptionRes.json();
+
+    setStats({
+      totalOrders: orders.length || 0,
+      totalProducts: products.length || 0,
+      subscription: subscription?.type || 'trial',
+    });
+  };
 
   if (isLoading || !user) return <p className="text-center mt-10">Carregando...</p>;
 

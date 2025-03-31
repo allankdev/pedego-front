@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ProductForm } from '@/components/Admin/ProductForm';
+import Cookie from 'js-cookie';
 
 export default function ProductsPage() {
   const { user, isLoading } = useAuth();
@@ -15,27 +16,32 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<any>(null);
 
   const fetchProducts = async () => {
-    const token = document.cookie.split('token=')[1];
-    const res = await fetch('http://localhost:3000/api/products', {
+    const token = Cookie.get('token');
+    if (!token || !user?.store?.id) return;
+
+    const res = await fetch(`http://localhost:3000/api/products?storeId=${user.store.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+
     const data = await res.json();
-    setProducts(data);
+    setProducts(Array.isArray(data) ? data : []);
   };
 
   useEffect(() => {
-    if (!isLoading && user?.role !== 'ADMIN') {
+    if (!isLoading && (!user || user.role !== 'ADMIN')) {
       router.push('/auth/login');
     }
   }, [isLoading, user, router]);
 
   useEffect(() => {
-    if (user) fetchProducts();
+    if (user?.store?.id) {
+      fetchProducts();
+    }
   }, [user]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Tem certeza que deseja excluir este produto?')) return;
-    const token = document.cookie.split('token=')[1];
+    const token = Cookie.get('token');
     await fetch(`http://localhost:3000/api/products/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -57,15 +63,24 @@ export default function ProductsPage() {
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Gerenciar Produtos</h2>
-        <Button onClick={() => setShowForm(true)}>Novo Produto</Button>
+        <Button onClick={() => {
+          setEditingProduct(null);
+          setShowForm(true);
+        }}>
+          Novo Produto
+        </Button>
       </div>
 
       {showForm && (
         <div className="border rounded-lg p-4 bg-muted">
-          <ProductForm initialData={editingProduct} onSuccess={() => {
-            fetchProducts();
-            closeForm();
-          }} onCancel={closeForm} />
+          <ProductForm
+            initialData={editingProduct}
+            onSuccess={() => {
+              fetchProducts();
+              closeForm();
+            }}
+            onCancel={closeForm}
+          />
         </div>
       )}
 
