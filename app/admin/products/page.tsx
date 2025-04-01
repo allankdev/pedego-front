@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ProductForm } from '@/components/Admin/ProductForm';
+import { ProductForm } from '@/components/admin/ProductForm';
 import Cookie from 'js-cookie';
 
 export default function ProductsPage() {

@@ -3,21 +3,28 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent } from '@/components/ui/card';
-import { ChartOrders } from './chart-orders';
-import { ChartValues } from './chart-values';
-import { ChartHours } from './chart-hours';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { ChartOrders } from '@/components/reports/chart-orders';
+import { ChartValues } from '@/components/reports/chart-values';
+import { ChartHours } from '@/components/reports/chart-hours';
+import { useOrdersReport } from '@/hooks/useOrdersReport';
+import { ReportChartCard } from '@/components/reports/ReportChartCard';
+import {
+  groupOrdersByDate,
+  getPeakHours,
+  averageOrderValue,
+  exportOrdersToCSV,
+} from '@/lib/report/reportUtils';
 
 export default function ReportsPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [orders, setOrders] = useState<any[]>([]);
-  const [filteredOrders, setFilteredOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { orders, fetchOrders, loading } = useOrdersReport();
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [filteredOrders, setFilteredOrders] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isLoading && user?.role !== 'ADMIN') {
@@ -30,86 +37,18 @@ export default function ReportsPage() {
   }, [user]);
 
   useEffect(() => {
-    if (startDate || endDate) {
-      const start = startDate ? new Date(startDate) : null;
-      const end = endDate ? new Date(endDate) : null;
+    const start = startDate ? new Date(startDate) : null;
+    const end = endDate ? new Date(endDate) : null;
 
-      const filtered = orders.filter((order) => {
-        const created = new Date(order.createdAt);
-        return (!start || created >= start) && (!end || created <= end);
-      });
+    const filtered = orders.filter((order) => {
+      const created = new Date(order.createdAt);
+      return (!start || created >= start) && (!end || created <= end);
+    });
 
-      setFilteredOrders(filtered);
-    } else {
-      setFilteredOrders(orders);
-    }
+    setFilteredOrders(filtered);
   }, [orders, startDate, endDate]);
 
-  const fetchOrders = async () => {
-    try {
-      const token = document.cookie.split('token=')[1];
-      const res = await fetch('http://localhost:3000/api/orders', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setOrders(data);
-    } catch (err) {
-      console.error('Erro ao buscar pedidos:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const groupOrdersByDate = () => {
-    const map: Record<string, { count: number; total: number }> = {};
-    filteredOrders.forEach((order) => {
-      const date = new Date(order.createdAt).toLocaleDateString('pt-BR');
-      if (!map[date]) map[date] = { count: 0, total: 0 };
-      map[date].count += 1;
-      map[date].total += parseFloat(order.total || 0);
-    });
-    return Object.entries(map).map(([date, val]) => ({
-      date,
-      count: val.count,
-      total: parseFloat(val.total.toFixed(2)),
-    }));
-  };
-
-  const getPeakHours = () => {
-    const map: Record<string, number> = {};
-    filteredOrders.forEach((order) => {
-      const hour = new Date(order.createdAt).getHours().toString().padStart(2, '0') + ':00';
-      map[hour] = (map[hour] || 0) + 1;
-    });
-
-    return Object.entries(map)
-      .map(([hour, count]) => ({ hour, count }))
-      .sort((a, b) => a.hour.localeCompare(b.hour));
-  };
-
-  const exportToCSV = () => {
-    const csv = [
-      ['Data', 'Total (R$)', 'Quantidade de pedidos'],
-      ...groupOrdersByDate().map((row) => [row.date, row.total.toFixed(2), row.count]),
-    ]
-      .map((row) => row.join(','))
-      .join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'relatorio-pedidos.csv';
-    link.click();
-  };
-
-  const averageValue = () => {
-    const total = filteredOrders.reduce((sum, o) => sum + parseFloat(o.total || 0), 0);
-    return filteredOrders.length ? (total / filteredOrders.length).toFixed(2) : '0.00';
-  };
-
-  const dailyData = groupOrdersByDate();
+  const dailyData = groupOrdersByDate(filteredOrders);
 
   if (isLoading) return <p className="p-4">Carregando autenticação...</p>;
   if (loading) return <p className="p-4">Carregando relatórios...</p>;
@@ -127,33 +66,24 @@ export default function ReportsPage() {
           <label className="text-sm">Data final</label>
           <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
-        <Button onClick={exportToCSV}>📤 Exportar CSV</Button>
+        <Button onClick={() => exportOrdersToCSV(dailyData)}>📤 Exportar CSV</Button>
       </div>
 
       <p className="text-muted-foreground text-sm">
-        Valor médio por pedido: <strong>R$ {averageValue()}</strong>
+        Valor médio por pedido: <strong>R$ {averageOrderValue(filteredOrders)}</strong>
       </p>
 
-      <Card>
-        <CardContent className="p-4">
-          <h2 className="text-lg font-semibold mb-2">Pedidos por dia</h2>
-          <ChartOrders data={dailyData.map((d) => ({ date: d.date, count: d.count }))} />
-        </CardContent>
-      </Card>
+      <ReportChartCard title="Pedidos por dia">
+        <ChartOrders data={dailyData.map((d) => ({ date: d.date, count: d.count }))} />
+      </ReportChartCard>
 
-      <Card>
-        <CardContent className="p-4">
-          <h2 className="text-lg font-semibold mb-2">Receita por dia</h2>
-          <ChartValues data={dailyData.map((d) => ({ date: d.date, total: d.total }))} />
-        </CardContent>
-      </Card>
+      <ReportChartCard title="Receita por dia">
+        <ChartValues data={dailyData.map((d) => ({ date: d.date, total: d.total }))} />
+      </ReportChartCard>
 
-      <Card>
-        <CardContent className="p-4">
-          <h2 className="text-lg font-semibold mb-2">Horários de Pico</h2>
-          <ChartHours data={getPeakHours()} />
-        </CardContent>
-      </Card>
+      <ReportChartCard title="Horários de Pico">
+        <ChartHours data={getPeakHours(filteredOrders)} />
+      </ReportChartCard>
     </div>
   );
 }

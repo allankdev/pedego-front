@@ -59,7 +59,6 @@ export default function StorePage() {
         ))}
       </section>
 
-      {/* Carrinho flutuante */}
       <FloatingCart />
     </div>
   );
