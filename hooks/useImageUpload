@@ -1,0 +1,43 @@
+import { useState } from "react";
+
+export function useImageUpload() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  const uploadImage = async (file: File) => {
+    setLoading(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("/api/cloudflare/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao fazer upload para o Cloudflare");
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setImageUrl(data.url);
+      return data.url; // Retorna a URL da imagem enviada
+
+    } catch (err: any) {
+      setError(err.message || "Erro ao fazer upload.");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { uploadImage, loading, error, imageUrl };
+}

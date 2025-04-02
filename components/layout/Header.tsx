@@ -17,9 +17,6 @@ export const Header = () => {
         <nav className="flex items-center gap-4">
           {user ? (
             <>
-              <Link href="/orders" className="text-sm font-medium hover:text-green-600">
-                Pedidos
-              </Link>
               <Button onClick={logout} variant="outline" className="text-sm">
                 Sair
               </Button>

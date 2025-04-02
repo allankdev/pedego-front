@@ -1,26 +1,49 @@
-'use client';
+"use client"
 
-import { useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { useRouter } from 'next/navigation';
-import { CouponForm } from '@/components/admin/CouponForm';
+import { useAuth } from "@/hooks/useAuth"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
+import { CategoryForm } from "@/components/admin/CategoryForm"; 
+import { motion } from "framer-motion"
 
-export default function CouponsPage() {
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
+export default function AdminCategoriesPage() {
+  const { user, isLoading } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && (!user || user.role !== 'ADMIN')) {
-      router.push('/auth/login');
+    if (!isLoading && (!user || user.role !== "ADMIN")) {
+      router.push("/auth/login")
     }
-  }, [isLoading, user, router]);
+  }, [isLoading, user, router])
 
-  if (!user?.store?.id) return null;
+  // Mostrar tela de carregamento enquanto verifica autenticação
+  if (isLoading || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-2">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Redirecionar se não for admin
+  if (user.role !== "ADMIN") {
+    router.push("/auth/login")
+    return null
+  }
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      <h2 className="text-xl font-semibold">Cupons de Desconto</h2>
-      <CouponForm />
-    </div>
-  );
+    <motion.div
+      className="p-6 space-y-6 max-w-3xl mx-auto"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <h2 className="text-xl font-semibold">Categorias</h2>
+      <CategoryForm />
+    </motion.div>
+  )
 }
+

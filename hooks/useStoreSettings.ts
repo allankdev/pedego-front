@@ -1,4 +1,3 @@
-// hooks/useStoreSettings.ts
 'use client';
 
 import { useState } from 'react';
@@ -21,8 +20,14 @@ export function useStoreSettings() {
       const res = await fetch(`http://localhost:3000/api/stores/${subdomain}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       const data = await res.json();
-      setStore({ ...data, paymentMethods: data.paymentMethods || [] });
+      setStore({
+        ...data,
+        paymentMethods: data.paymentMethods || [],
+        isOpen: Boolean(data.isOpen),
+        autoPrint: Boolean(data.autoPrint),
+      });
     } catch (err) {
       setError('Erro ao carregar os dados da loja.');
     } finally {
@@ -34,33 +39,34 @@ export function useStoreSettings() {
     setLoading(true);
     setError(null);
     try {
-      const token = document.cookie.split('token=')[1];
+      const token = document.cookie.split("token=")[1];
       const subdomain = user?.store?.subdomain;
       if (!token || !subdomain) return;
-
+  
       const res = await fetch(`http://localhost:3000/api/stores/${subdomain}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(updatedData),
       });
-
+  
       const updatedStore = await res.json();
-
+  
       if (res.ok) {
         setUser({ ...user, store: updatedStore });
         setStore(updatedStore);
       } else {
-        setError(updatedStore.message || 'Erro ao atualizar a loja');
+        setError(updatedStore.message || "Erro ao atualizar a loja");
       }
     } catch (err) {
-      setError('Erro ao atualizar a loja.');
+      setError("Erro ao atualizar a loja.");
     } finally {
       setLoading(false);
     }
   };
+  
 
   return {
     store,
