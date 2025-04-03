@@ -22,6 +22,7 @@ import {
   ImageIcon,
   X,
   CheckCircle,
+  Package,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
@@ -35,6 +36,7 @@ interface Props {
     description: string
     price: string
     available: boolean
+    hasStockControl?: boolean
     categoryId?: number
     imageId?: string
   }
@@ -48,6 +50,8 @@ export function ProductForm({ initialData, onSuccess, onCancel }: Props) {
   const [description, setDescription] = useState(initialData?.description || "")
   const [price, setPrice] = useState(initialData?.price || "")
   const [available, setAvailable] = useState(initialData?.available ?? true)
+  const [hasStockControl, setHasStockControl] = useState(initialData?.hasStockControl ?? false)
+  const [stockQuantity, setStockQuantity] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -84,6 +88,27 @@ export function ProductForm({ initialData, onSuccess, onCancel }: Props) {
     }
     fetchCategories()
   }, [user])
+
+  useEffect(() => {
+    if (!initialData?.id || !user?.store?.id || !initialData.hasStockControl) return
+
+    const fetchStock = async () => {
+      try {
+        const token = document.cookie.split("token=")[1]
+        const res = await fetch(`http://localhost:3000/api/stock/${initialData.id}/${user.store.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setStockQuantity(data.quantity)
+        }
+      } catch (err) {
+        console.error("Erro ao buscar estoque:", err)
+      }
+    }
+
+    fetchStock()
+  }, [initialData, user])
 
   const createCategory = async () => {
     if (!newCategory.trim()) return
@@ -158,6 +183,7 @@ export function ProductForm({ initialData, onSuccess, onCancel }: Props) {
       formData.append("description", description)
       formData.append("price", parsedPrice.toString())
       formData.append("available", String(available))
+      formData.append("hasStockControl", String(hasStockControl))
       if (categoryId) formData.append("categoryId", categoryId.toString())
       if (user?.store?.id) formData.append("storeId", user.store.id.toString())
       if (file) formData.append("file", file)
@@ -176,6 +202,37 @@ export function ProductForm({ initialData, onSuccess, onCancel }: Props) {
         const text = await res.text()
         console.error("Erro na resposta da API (texto):", text)
         throw new Error("Erro ao salvar produto")
+      }
+
+      const savedProduct = await res.json()
+
+      // 👉 Cria ou atualiza o estoque se tiver controle ativado
+      if (hasStockControl && stockQuantity !== null) {
+        const stockPayload = {
+          productId: savedProduct.id,
+          storeId: user.store.id,
+          quantity: stockQuantity,
+        }
+
+        const stockMethod = initialData ? "PUT" : "POST"
+        const stockUrl = initialData
+          ? `http://localhost:3000/api/stock/${savedProduct.id}/${user.store.id}`
+          : "http://localhost:3000/api/stock"
+
+        const stockRes = await fetch(stockUrl, {
+          method: stockMethod,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(stockPayload),
+        })
+
+        if (!stockRes.ok) {
+          const errorText = await stockRes.text()
+          console.error("Erro ao atualizar estoque:", errorText)
+          throw new Error("Erro ao atualizar estoque")
+        }
       }
 
       // Mostrar animação de sucesso
@@ -415,26 +472,74 @@ export function ProductForm({ initialData, onSuccess, onCancel }: Props) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t">
-              <div className="space-y-1">
-                <h3 className="text-sm font-medium text-slate-700">Disponibilidade</h3>
-                <p className="text-xs text-slate-500">
-                  {available
-                    ? "Este produto está disponível para venda"
-                    : "Este produto não está disponível para venda"}
-                </p>
+            <div className="space-y-1">
+              <h3 className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                <Package className="h-4 w-4 text-slate-500" />
+                Configurações de Venda
+              </h3>
+              <Separator className="my-2" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex items-center justify-between p-4 rounded-md border border-slate-200 bg-slate-50">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium text-slate-700">Disponibilidade</h3>
+                  <p className="text-xs text-slate-500">
+                    {available
+                      ? "Este produto está disponível para venda"
+                      : "Este produto não está disponível para venda"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="available"
+                    checked={available}
+                    onCheckedChange={setAvailable}
+                    className="data-[state=checked]:bg-green-600"
+                  />
+                  <Label htmlFor="available" className={available ? "text-green-700" : "text-red-700"}>
+                    {available ? "Disponível" : "Indisponível"}
+                  </Label>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="available"
-                  checked={available}
-                  onCheckedChange={setAvailable}
-                  className="data-[state=checked]:bg-green-600"
-                />
-                <Label htmlFor="available" className={available ? "text-green-700" : "text-red-700"}>
-                  {available ? "Disponível" : "Indisponível"}
-                </Label>
+
+              <div className="flex items-center justify-between p-4 rounded-md border border-slate-200 bg-slate-50">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium text-slate-700">Controle de Estoque</h3>
+                  <p className="text-xs text-slate-500">
+                    {hasStockControl
+                      ? "Este produto terá controle de estoque"
+                      : "Estoque não será controlado para este produto"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="hasStockControl"
+                    checked={hasStockControl}
+                    onCheckedChange={setHasStockControl}
+                    className="data-[state=checked]:bg-blue-600"
+                  />
+                  <Label htmlFor="hasStockControl" className={hasStockControl ? "text-blue-700" : "text-slate-700"}>
+                    {hasStockControl ? "Ativado" : "Desativado"}
+                  </Label>
+                </div>
               </div>
+
+              {hasStockControl && (
+                <div className="mt-4 p-4 rounded-md border border-slate-200 bg-slate-50">
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">Quantidade em Estoque</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={stockQuantity ?? ""}
+                      onChange={(e) => setStockQuantity(Number(e.target.value))}
+                      required={hasStockControl}
+                      className="focus:ring-2 focus:ring-slate-300 focus:border-slate-300 transition-all"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {error && (

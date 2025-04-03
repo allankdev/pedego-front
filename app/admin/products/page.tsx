@@ -50,7 +50,7 @@ export default function ProductsPage() {
 
     try {
       setLoadingProducts(true)
-      const res = await fetch(`http://localhost:3000/api/products?storeId=${user.store.id}`, {
+      const res = await fetch(`http://localhost:3000/api/products/my-store`, {
         headers: { Authorization: `Bearer ${token}` },
       })
 
