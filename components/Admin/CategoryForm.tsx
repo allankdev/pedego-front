@@ -17,9 +17,9 @@ export function CategoryForm() {
   const [editingName, setEditingName] = useState('');
 
   useEffect(() => {
-    if (user?.store?.id) {
+    if (user?.role === 'ADMIN') {
       fetchCategories();
-    }
+    }    
   }, [user]);
 
   const fetchCategories = async () => {
