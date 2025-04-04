@@ -7,14 +7,12 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ProductForm } from "@/components/admin/ProductForm"
 import Cookie from "js-cookie"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   ShoppingBag,
   Plus,
   Edit,
-  Trash2,
   Tag,
   DollarSign,
   Search,
@@ -26,6 +24,7 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 
 const R2_PUBLIC_URL = "https://pub-89335a236e764dca827836a2c27c4115.r2.dev"
 
@@ -50,7 +49,7 @@ export default function ProductsPage() {
 
     try {
       setLoadingProducts(true)
-      const res = await fetch(`http://localhost:3000/api/products/my-store`, {
+      const res = await fetch(`http://localhost:3000/api/products?storeId=${user.store.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
 
@@ -82,36 +81,48 @@ export default function ProductsPage() {
     }
   }, [user])
 
-  const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`Tem certeza que deseja excluir o produto "${name}"?`)) return
+  // Substituir a função handleDelete por uma função para alternar disponibilidade
+  const toggleProductAvailability = async (id: number, name: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus
+    const actionText = newStatus ? "ativar" : "inativar"
+
+    if (!confirm(`Tem certeza que deseja ${actionText} o produto "${name}"?`)) return
 
     const token = Cookie.get("token")
 
     try {
       const res = await fetch(`http://localhost:3000/api/products/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ available: newStatus }),
       })
 
-      console.log("Produto deletado com status:", res.status)
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error(`Erro ao ${actionText} produto:`, errorText)
+        throw new Error(`Erro ao ${actionText} produto`)
+      }
 
       // Mostrar notificação de sucesso
       setNotification({
         show: true,
         type: "success",
-        message: `Produto "${name}" excluído com sucesso!`,
+        message: `Produto "${name}" ${newStatus ? "ativado" : "inativado"} com sucesso!`,
       })
       setTimeout(() => setNotification(null), 3000)
 
       fetchProducts()
     } catch (err) {
-      console.error("Erro ao deletar produto:", err)
+      console.error(`Erro ao ${actionText} produto:`, err)
 
       // Mostrar notificação de erro
       setNotification({
         show: true,
         type: "error",
-        message: "Erro ao excluir produto. Tente novamente.",
+        message: `Erro ao ${actionText} produto. Tente novamente.`,
       })
       setTimeout(() => setNotification(null), 3000)
     }
@@ -156,6 +167,12 @@ export default function ProductsPage() {
   if (user.role !== "ADMIN") {
     router.push("/auth/login")
     return null
+  }
+
+  const updateProductInList = (updatedProduct: any) => {
+    setProducts((prevProducts) =>
+      prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
+    )
   }
 
   return (
@@ -271,24 +288,32 @@ export default function ProductsPage() {
                 >
                   <X className="h-5 w-5" />
                 </button>
+                {/* Atualizar a função onSuccess do ProductForm para garantir que o produto atualizado seja refletido na lista */}
                 <ProductForm
-                  initialData={editingProduct}
-                  onSuccess={() => {
-                    fetchProducts()
-                    closeForm()
+  key={editingProduct?.id ?? "new"}
+  initialData={editingProduct}
+  onSuccess={async (updated) => {
+    if (updated) {
+      if (editingProduct) {
+        updateProductInList(updated)
+        setEditingProduct(updated)
+      } else {
+        await fetchProducts()
+      }
+    }
+    closeForm()
+    setNotification({
+      show: true,
+      type: "success",
+      message: editingProduct
+        ? `Produto "${updated?.name || editingProduct.name}" atualizado com sucesso!`
+        : "Novo produto criado com sucesso!",
+    })
+    setTimeout(() => setNotification(null), 3000)
+  }}
+  onCancel={closeForm}
+/>
 
-                    // Mostrar notificação de sucesso
-                    setNotification({
-                      show: true,
-                      type: "success",
-                      message: editingProduct
-                        ? `Produto "${editingProduct.name}" atualizado com sucesso!`
-                        : "Novo produto criado com sucesso!",
-                    })
-                    setTimeout(() => setNotification(null), 3000)
-                  }}
-                  onCancel={closeForm}
-                />
               </div>
             </motion.div>
           )}
@@ -345,20 +370,20 @@ export default function ProductsPage() {
                           <ShoppingBag className="h-12 w-12 text-slate-300" />
                         </div>
                       )}
-                      <div className="absolute top-2 right-2">
-                        <Badge
-                          variant={product.available ? "default" : "destructive"}
-                          className={`
-                            ${
-                              product.available
-                                ? "bg-green-100 text-green-800 hover:bg-green-200"
-                                : "bg-red-100 text-red-800 hover:bg-red-200"
-                            }
-                            shadow-sm
-                          `}
+                      {/* Modificar o CardContent para incluir o Switch no lugar do Badge */}
+                      {/* Localizar o trecho com o Badge e substituir por: */}
+                      <div className="absolute top-2 right-2 flex items-center gap-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm">
+                        <span
+                          className={`text-xs font-medium ${product.available ? "text-green-700" : "text-red-700"}`}
                         >
                           {product.available ? "Disponível" : "Indisponível"}
-                        </Badge>
+                        </span>
+                        <Switch
+                          checked={product.available}
+                          onCheckedChange={() => toggleProductAvailability(product.id, product.name, product.available)}
+                          className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-red-400 h-5 w-9"
+                          size="sm"
+                        />
                       </div>
                     </div>
 
@@ -383,8 +408,10 @@ export default function ProductsPage() {
                     </div>
                   </CardContent>
 
-                  <CardFooter className="flex gap-2 p-4 pt-0">
-                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1">
+                  {/* Modificar o CardFooter para remover o botão de inativar */}
+                  {/* Localizar o CardFooter e substituir por: */}
+                  <CardFooter className="flex p-4 pt-0">
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full">
                       <Button
                         size="sm"
                         onClick={() => handleEdit(product)}
@@ -392,18 +419,6 @@ export default function ProductsPage() {
                       >
                         <Edit className="h-3.5 w-3.5" />
                         Editar
-                      </Button>
-                    </motion.div>
-
-                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1">
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDelete(product.id, product.name)}
-                        className="w-full gap-1 bg-red-600 hover:bg-red-700 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Excluir
                       </Button>
                     </motion.div>
                   </CardFooter>
