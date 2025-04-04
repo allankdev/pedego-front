@@ -550,11 +550,28 @@ export function ProductForm({ initialData, onSuccess, onCancel }: Props) {
           quantity: stockQuantity,
         }
 
-        const stockMethod = initialData ? "PUT" : "POST"
-        const stockUrl = initialData
-          ? `http://localhost:3000/api/stock/${savedProduct.id}/${user.store.id}`
-          : "http://localhost:3000/api/stock"
-
+        let stockMethod = "POST"
+        let stockUrl = "http://localhost:3000/api/stock"
+        
+        try {
+          const checkRes = await fetch(
+            `http://localhost:3000/api/stock/${savedProduct.id}/${user.store.id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          )
+        
+          if (checkRes.ok) {
+            // Se já existir estoque, vamos atualizar
+            stockMethod = "PUT"
+            stockUrl = `http://localhost:3000/api/stock/${savedProduct.id}/${user.store.id}`
+          }
+        } catch (err) {
+          console.error("Erro ao verificar estoque existente:", err)
+        }
+        
         const stockRes = await fetch(stockUrl, {
           method: stockMethod,
           headers: {
@@ -563,13 +580,15 @@ export function ProductForm({ initialData, onSuccess, onCancel }: Props) {
           },
           body: JSON.stringify(stockPayload),
         })
-
+        
         if (!stockRes.ok) {
           const errorText = await stockRes.text()
           console.error("Erro ao atualizar estoque:", errorText)
           throw new Error("Erro ao atualizar estoque")
         }
-      }
+
+        }
+        
 
       // Modificar a função handleSubmit para garantir que o produto atualizado seja retornado corretamente
       // Localizar o trecho após o salvamento do produto e antes do setTimeout
