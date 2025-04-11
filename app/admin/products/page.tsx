@@ -5,10 +5,12 @@ import { useAuth } from "@/hooks/useAuth"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ProductForm } from "@/components/admin/ProductForm"
+import { ProductForm } from "@/components/admin/product-form/ProductForm"
 import Cookie from "js-cookie"
 import { Skeleton } from "@/components/ui/skeleton"
 import { motion, AnimatePresence } from "framer-motion"
+import { ProductImage } from "@/components/product/ProductImage"
+
 import {
   ShoppingBag,
   Plus,
@@ -53,6 +55,10 @@ export default function ProductsPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
 
+      if (!res.ok) {
+        throw new Error(`Error fetching products: ${res.status}`)
+      }
+
       const data = await res.json()
       console.log("Produtos carregados:", data)
       setProducts(Array.isArray(data) ? data : [])
@@ -81,15 +87,16 @@ export default function ProductsPage() {
     }
   }, [user])
 
-  // Substituir a função handleDelete por uma função para alternar disponibilidade
+  // Função para alternar a disponibilidade do produto
   const toggleProductAvailability = async (id: number, name: string, currentStatus: boolean) => {
     const newStatus = !currentStatus
     const actionText = newStatus ? "ativar" : "inativar"
-
+  
     if (!confirm(`Tem certeza que deseja ${actionText} o produto "${name}"?`)) return
-
+  
     const token = Cookie.get("token")
-
+    if (!token) return
+  
     try {
       const res = await fetch(`http://localhost:3000/api/products/${id}`, {
         method: "PUT",
@@ -99,13 +106,13 @@ export default function ProductsPage() {
         },
         body: JSON.stringify({ available: newStatus }),
       })
-
+  
       if (!res.ok) {
         const errorText = await res.text()
         console.error(`Erro ao ${actionText} produto:`, errorText)
         throw new Error(`Erro ao ${actionText} produto`)
       }
-
+  
       // Mostrar notificação de sucesso
       setNotification({
         show: true,
@@ -113,11 +120,22 @@ export default function ProductsPage() {
         message: `Produto "${name}" ${newStatus ? "ativado" : "inativado"} com sucesso!`,
       })
       setTimeout(() => setNotification(null), 3000)
-
-      fetchProducts()
+  
+      // Atualizando o produto diretamente na lista
+      setProducts((prevProducts) =>
+        prevProducts.map((product) => (product.id === id ? { ...product, available: newStatus } : product)),
+      )
+  
+      // If this product is currently being edited, update the editingProduct state too
+      if (editingProduct && editingProduct.id === id) {
+        setEditingProduct({
+          ...editingProduct,
+          available: newStatus,
+        })
+      }
     } catch (err) {
       console.error(`Erro ao ${actionText} produto:`, err)
-
+  
       // Mostrar notificação de erro
       setNotification({
         show: true,
@@ -127,11 +145,28 @@ export default function ProductsPage() {
       setTimeout(() => setNotification(null), 3000)
     }
   }
+  
 
   const handleEdit = (product: any) => {
+    // Configura o produto que será editado
     setEditingProduct(product)
     setShowForm(true)
+  
+    // Força o scroll para o topo
+    window.scrollTo({
+      top: 0,
+      behavior: "auto",
+    })
+  
+    // Adiciona um pequeno atraso para garantir que o formulário seja renderizado antes do scroll
+    setTimeout(() => {
+      window.scrollTo({
+        top: 0,
+        behavior: "auto",
+      })
+    }, 50)
   }
+  
 
   const closeForm = () => {
     setShowForm(false)
@@ -170,10 +205,30 @@ export default function ProductsPage() {
   }
 
   const updateProductInList = (updatedProduct: any) => {
+    console.log("Updating product in list:", updatedProduct)
+  
     setProducts((prevProducts) =>
-      prevProducts.map((product) => (product.id === updatedProduct.id ? updatedProduct : product)),
+      prevProducts.map((product) =>
+        product.id === updatedProduct.id
+          ? {
+              ...product,
+              ...updatedProduct, // Atualizando os campos que foram modificados
+              available: updatedProduct.available !== undefined ? updatedProduct.available : product.available,
+              stockQuantity: updatedProduct.stockQuantity !== undefined ? updatedProduct.stockQuantity : product.stockQuantity,
+            }
+          : product,
+      ),
     )
+  
+    // Se o produto que está sendo editado for o que está em edição, também atualize o estado
+    if (editingProduct && editingProduct.id === updatedProduct.id) {
+      setEditingProduct({
+        ...editingProduct,
+        ...updatedProduct,
+      })
+    }
   }
+  
 
   return (
     <motion.div
@@ -181,11 +236,13 @@ export default function ProductsPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
+      id="top"
     >
       {notification && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
           className={`fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${
             notification.type === "success"
               ? "bg-green-100 text-green-800 border border-green-200"
@@ -260,6 +317,7 @@ export default function ProductsPage() {
                 onClick={() => {
                   setEditingProduct(null)
                   setShowForm(true)
+                  window.scrollTo({ top: 0, behavior: "auto" })
                 }}
                 className="gap-2 bg-slate-800 hover:bg-slate-700 transition-colors"
               >
@@ -288,32 +346,29 @@ export default function ProductsPage() {
                 >
                   <X className="h-5 w-5" />
                 </button>
-                {/* Atualizar a função onSuccess do ProductForm para garantir que o produto atualizado seja refletido na lista */}
                 <ProductForm
-  key={editingProduct?.id ?? "new"}
-  initialData={editingProduct}
-  onSuccess={async (updated) => {
-    if (updated) {
-      if (editingProduct) {
-        updateProductInList(updated)
-        setEditingProduct(updated)
-      } else {
-        await fetchProducts()
-      }
-    }
-    closeForm()
-    setNotification({
-      show: true,
-      type: "success",
-      message: editingProduct
-        ? `Produto "${updated?.name || editingProduct.name}" atualizado com sucesso!`
-        : "Novo produto criado com sucesso!",
-    })
-    setTimeout(() => setNotification(null), 3000)
-  }}
-  onCancel={closeForm}
-/>
-
+                  key={editingProduct?.id ?? "new"}
+                  initialData={editingProduct}
+                  onSuccess={async (updated) => {
+                    if (updated) {
+                      if (editingProduct) {
+                        updateProductInList(updated)
+                      } else {
+                        await fetchProducts()
+                      }
+                    }
+                    closeForm()
+                    setNotification({
+                      show: true,
+                      type: "success",
+                      message: editingProduct
+                        ? `Produto "${updated?.name || editingProduct.name}" atualizado com sucesso!`
+                        : "Novo produto criado com sucesso!",
+                    })
+                    setTimeout(() => setNotification(null), 3000)
+                  }}
+                  onCancel={closeForm}
+                />
               </div>
             </motion.div>
           )}
@@ -359,19 +414,7 @@ export default function ProductsPage() {
                 <Card className="overflow-hidden h-full border-slate-200 hover:shadow-md transition-all">
                   <CardContent className="p-0">
                     <div className="relative">
-                      {product.imageId ? (
-                        <img
-                          src={`${R2_PUBLIC_URL}/${product.imageId}`}
-                          alt={product.name}
-                          className="w-full h-48 object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-48 bg-slate-100 flex items-center justify-center">
-                          <ShoppingBag className="h-12 w-12 text-slate-300" />
-                        </div>
-                      )}
-                      {/* Modificar o CardContent para incluir o Switch no lugar do Badge */}
-                      {/* Localizar o trecho com o Badge e substituir por: */}
+                    <ProductImage imageId={product.imageId} alt={product.name} />
                       <div className="absolute top-2 right-2 flex items-center gap-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm">
                         <span
                           className={`text-xs font-medium ${product.available ? "text-green-700" : "text-red-700"}`}
@@ -381,8 +424,7 @@ export default function ProductsPage() {
                         <Switch
                           checked={product.available}
                           onCheckedChange={() => toggleProductAvailability(product.id, product.name, product.available)}
-                          className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-red-400 h-5 w-9"
-                          size="sm"
+                          className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-red-400 h-5 w-9 scale-75 origin-right"
                         />
                       </div>
                     </div>
@@ -408,8 +450,6 @@ export default function ProductsPage() {
                     </div>
                   </CardContent>
 
-                  {/* Modificar o CardFooter para remover o botão de inativar */}
-                  {/* Localizar o CardFooter e substituir por: */}
                   <CardFooter className="flex p-4 pt-0">
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full">
                       <Button
@@ -450,6 +490,7 @@ export default function ProductsPage() {
                 onClick={() => {
                   setEditingProduct(null)
                   setShowForm(true)
+                  window.scrollTo({ top: 0, behavior: "auto" })
                 }}
                 className="gap-2 bg-slate-800 hover:bg-slate-700"
               >
@@ -463,4 +504,3 @@ export default function ProductsPage() {
     </motion.div>
   )
 }
-
